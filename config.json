@@ -1,6 +1,6 @@
 {
-  "entry_id": null,
-  "classic_league_ids": [],
+  "entry_id": 5470938,
+  "classic_league_ids": [218656],
   "h2h_league_ids": [],
   "notes": "Set entry_id to the number in your FPL team URL (fantasy.premierleague.com/entry/XXXXXXX/event/1). Add mini-league IDs from the league URL. Leave null/empty and the mirror still pulls all global data."
 }
