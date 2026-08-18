@@ -159,7 +159,15 @@ def team_strength(teams, hist):
     return ts
 
 
-def build(horizon_start=1, horizon=8):
+# Movers keep their OLD club's start rate under the shipped model, which is wrong
+# in a predictable direction: a player nailed at a mid-table side is not nailed at
+# a top side. Blend the inherited rate with the price-rank pecking-order prior at
+# the NEW club. MOVER_BLEND = weight on the inherited rate (1.0 reproduces shipped).
+MOVER_BLEND = 0.50
+
+
+def build(horizon_start=1, horizon=8, mover_blend=None):
+    mover_blend = MOVER_BLEND if mover_blend is None else mover_blend
     players, teams, fixtures, hist, old = load()
     hist = per_match_history(hist, old, players)
     rates = player_rates(hist, players)
@@ -186,6 +194,8 @@ def build(horizon_start=1, horizon=8):
     base = 0.75 * p["fit_start_rate"] + 0.25 * p["start_rate"]
     base = base.fillna(p["fit_start_rate"]).fillna(p["start_rate"]).fillna(prior_start)
     p["p_start"] = base.clip(0, 0.97) * p["avail"]
+    p["_prior_start"] = prior_start
+    p["_base_start"] = base
     p["mins_if_start"] = p["mins_when_started"].fillna(78.0).clip(45, 90)
     # Small cameo probability for non-starters.
     p["p_cameo"] = ((1 - p["p_start"]) * 0.30 * p["avail"]).clip(0, 0.5)
@@ -212,6 +222,15 @@ def build(horizon_start=1, horizon=8):
     p["club_move_mult"] = (new_xg / old_xg).fillna(1.0).clip(0.70, 1.50)
     p["moved"] = p["old_team"].notna() & (p["old_team"] != p["team"].map(dict(zip(ts.index, ts["name"]))))
     p.loc[~p["moved"].fillna(False), "club_move_mult"] = 1.0
+
+    # Minutes adjustment for movers. The attacking adjustment above already accepts
+    # that a transfer changes a player's context; leaving p(start) untouched is
+    # inconsistent, and biased upward for anyone moving to a stronger squad.
+    mv = p["moved"].fillna(False)
+    blended = mover_blend * p["_base_start"] + (1 - mover_blend) * p["_prior_start"]
+    p.loc[mv, "p_start"] = blended[mv].clip(0, 0.97) * p.loc[mv, "avail"]
+    p["p_cameo"] = ((1 - p["p_start"]) * 0.30 * p["avail"]).clip(0, 0.5)
+    p["xmins"] = p["p_start"] * p["mins_if_start"] + p["p_cameo"] * 22
     for c in ["g_90", "a_90"]:
         p[c] = p[c] * p["club_move_mult"]
 

@@ -1,13 +1,13 @@
 [
  {
-  "id": 109,
-  "name": "Verbruggen",
+  "id": 82,
+  "name": "Kelleher",
   "pos": "GK",
-  "club": "BHA",
+  "club": "BRE",
   "xi": true,
   "c": false,
   "v": false,
-  "buy": 4.5
+  "buy": 5.0
  },
  {
   "id": 4,
@@ -16,18 +16,18 @@
   "club": "ARS",
   "xi": true,
   "c": false,
-  "v": false,
+  "v": true,
   "buy": 8.0
  },
  {
-  "id": 388,
-  "name": "Guéhi",
+  "id": 356,
+  "name": "Virgil",
   "pos": "DEF",
-  "club": "MCI",
+  "club": "LIV",
   "xi": true,
   "c": false,
   "v": false,
-  "buy": 6.0
+  "buy": 6.5
  },
  {
   "id": 229,
@@ -50,24 +50,24 @@
   "buy": 12.0
  },
  {
-  "id": 397,
-  "name": "Semenyo",
+  "id": 13,
+  "name": "Rice",
   "pos": "MID",
-  "club": "MCI",
-  "xi": true,
-  "c": false,
-  "v": true,
-  "buy": 8.5
- },
- {
-  "id": 481,
-  "name": "Anderson",
-  "pos": "MID",
-  "club": "MCI",
+  "club": "ARS",
   "xi": true,
   "c": false,
   "v": false,
-  "buy": 6.5
+  "buy": 7.5
+ },
+ {
+  "id": 427,
+  "name": "Mbeumo",
+  "pos": "MID",
+  "club": "MUN",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 8.0
  },
  {
   "id": 452,
@@ -80,14 +80,14 @@
   "buy": 7.0
  },
  {
-  "id": 427,
-  "name": "Mbeumo",
+  "id": 481,
+  "name": "Anderson",
   "pos": "MID",
-  "club": "MUN",
+  "club": "MCI",
   "xi": true,
   "c": false,
   "v": false,
-  "buy": 8.0
+  "buy": 6.5
  },
  {
   "id": 106,
@@ -110,16 +110,6 @@
   "buy": 6.0
  },
  {
-  "id": 497,
-  "name": "Dubravka",
-  "pos": "GK",
-  "club": "TOT",
-  "xi": false,
-  "c": false,
-  "v": false,
-  "buy": 4.0
- },
- {
   "id": 445,
   "name": "Thiaw",
   "pos": "DEF",
@@ -130,20 +120,30 @@
   "buy": 5.0
  },
  {
-  "id": 498,
-  "name": "Senesi",
+  "id": 269,
+  "name": "Sessegnon",
   "pos": "DEF",
-  "club": "TOT",
+  "club": "FUL",
   "xi": false,
   "c": false,
   "v": false,
-  "buy": 6.0
+  "buy": 4.5
  },
  {
-  "id": 321,
-  "name": "Walle Egeli",
+  "id": 295,
+  "name": "McBurnie",
   "pos": "FWD",
-  "club": "IPS",
+  "club": "HUL",
+  "xi": false,
+  "c": false,
+  "v": false,
+  "buy": 5.5
+ },
+ {
+  "id": 57,
+  "name": "Petrović",
+  "pos": "GK",
+  "club": "BOU",
   "xi": false,
   "c": false,
   "v": false,
