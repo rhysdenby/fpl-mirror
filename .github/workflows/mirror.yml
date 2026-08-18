@@ -1,0 +1,48 @@
+name: FPL mirror
+
+on:
+  schedule:
+    # Hourly baseline pull.
+    - cron: "7 * * * *"
+    # Every 10 min across UK match windows (Fri 18:00 - Mon 23:00 UTC).
+    - cron: "*/10 11-23 * * 6,0"
+    - cron: "*/10 17-23 * * 5,1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "full or daily (daily also pulls per-player match history)"
+        default: "full"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fpl-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pull FPL data
+        env:
+          MIRROR_MODE: ${{ github.event.inputs.mode || 'full' }}
+        run: python scripts/mirror.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "fpl-mirror"
+          git config user.email "actions@github.com"
+          git add data snapshots
+          if git diff --staged --quiet; then
+            echo "no change"
+          else
+            git commit -m "mirror: $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi

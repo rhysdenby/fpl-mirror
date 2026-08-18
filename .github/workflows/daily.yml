@@ -1,0 +1,39 @@
+name: FPL mirror (daily deep pull)
+
+on:
+  schedule:
+    # 04:20 UTC daily. Pulls per-player match-by-match history for the top ~280
+    # players by ownership/minutes, which the hourly job skips.
+    - cron: "20 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fpl-mirror
+  cancel-in-progress: false
+
+jobs:
+  deep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pull FPL data (deep)
+        env:
+          MIRROR_MODE: daily
+        run: python scripts/mirror.py
+      - name: Commit if changed
+        run: |
+          git config user.name "fpl-mirror"
+          git config user.email "actions@github.com"
+          git add data snapshots
+          if git diff --staged --quiet; then
+            echo "no change"
+          else
+            git commit -m "mirror(deep): $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
