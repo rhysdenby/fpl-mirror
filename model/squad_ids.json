@@ -1,0 +1,152 @@
+[
+ {
+  "id": 109,
+  "name": "Verbruggen",
+  "pos": "GK",
+  "club": "BHA",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 4.5
+ },
+ {
+  "id": 4,
+  "name": "Gabriel",
+  "pos": "DEF",
+  "club": "ARS",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 8.0
+ },
+ {
+  "id": 388,
+  "name": "Guéhi",
+  "pos": "DEF",
+  "club": "MCI",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 6.0
+ },
+ {
+  "id": 229,
+  "name": "Tarkowski",
+  "pos": "DEF",
+  "club": "EVE",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 6.0
+ },
+ {
+  "id": 426,
+  "name": "B.Fernandes",
+  "pos": "MID",
+  "club": "MUN",
+  "xi": true,
+  "c": true,
+  "v": false,
+  "buy": 12.0
+ },
+ {
+  "id": 397,
+  "name": "Semenyo",
+  "pos": "MID",
+  "club": "MCI",
+  "xi": true,
+  "c": false,
+  "v": true,
+  "buy": 8.5
+ },
+ {
+  "id": 481,
+  "name": "Anderson",
+  "pos": "MID",
+  "club": "MCI",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 6.5
+ },
+ {
+  "id": 452,
+  "name": "Bruno G.",
+  "pos": "MID",
+  "club": "ARS",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 7.0
+ },
+ {
+  "id": 427,
+  "name": "Mbeumo",
+  "pos": "MID",
+  "club": "MUN",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 8.0
+ },
+ {
+  "id": 106,
+  "name": "Thiago",
+  "pos": "FWD",
+  "club": "BRE",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 8.0
+ },
+ {
+  "id": 346,
+  "name": "Calvert-Lewin",
+  "pos": "FWD",
+  "club": "LEE",
+  "xi": true,
+  "c": false,
+  "v": false,
+  "buy": 6.0
+ },
+ {
+  "id": 497,
+  "name": "Dubravka",
+  "pos": "GK",
+  "club": "TOT",
+  "xi": false,
+  "c": false,
+  "v": false,
+  "buy": 4.0
+ },
+ {
+  "id": 445,
+  "name": "Thiaw",
+  "pos": "DEF",
+  "club": "NEW",
+  "xi": false,
+  "c": false,
+  "v": false,
+  "buy": 5.0
+ },
+ {
+  "id": 498,
+  "name": "Senesi",
+  "pos": "DEF",
+  "club": "TOT",
+  "xi": false,
+  "c": false,
+  "v": false,
+  "buy": 6.0
+ },
+ {
+  "id": 321,
+  "name": "Walle Egeli",
+  "pos": "FWD",
+  "club": "IPS",
+  "xi": false,
+  "c": false,
+  "v": false,
+  "buy": 4.5
+ }
+]
