@@ -1,152 +1,152 @@
 [
- {
-  "id": 82,
-  "name": "Kelleher",
-  "pos": "GK",
-  "club": "BRE",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 5.0
- },
- {
-  "id": 4,
-  "name": "Gabriel",
-  "pos": "DEF",
-  "club": "ARS",
-  "xi": true,
-  "c": false,
-  "v": true,
-  "buy": 8.0
- },
- {
-  "id": 356,
-  "name": "Virgil",
-  "pos": "DEF",
-  "club": "LIV",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 6.5
- },
- {
-  "id": 229,
-  "name": "Tarkowski",
-  "pos": "DEF",
-  "club": "EVE",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 6.0
- },
- {
-  "id": 426,
-  "name": "B.Fernandes",
-  "pos": "MID",
-  "club": "MUN",
-  "xi": true,
-  "c": true,
-  "v": false,
-  "buy": 12.0
- },
- {
-  "id": 13,
-  "name": "Rice",
-  "pos": "MID",
-  "club": "ARS",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 7.5
- },
- {
-  "id": 427,
-  "name": "Mbeumo",
-  "pos": "MID",
-  "club": "MUN",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 8.0
- },
- {
-  "id": 452,
-  "name": "Bruno G.",
-  "pos": "MID",
-  "club": "ARS",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 7.0
- },
- {
-  "id": 481,
-  "name": "Anderson",
-  "pos": "MID",
-  "club": "MCI",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 6.5
- },
- {
-  "id": 106,
-  "name": "Thiago",
-  "pos": "FWD",
-  "club": "BRE",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 8.0
- },
- {
-  "id": 346,
-  "name": "Calvert-Lewin",
-  "pos": "FWD",
-  "club": "LEE",
-  "xi": true,
-  "c": false,
-  "v": false,
-  "buy": 6.0
- },
- {
-  "id": 445,
-  "name": "Thiaw",
-  "pos": "DEF",
-  "club": "NEW",
-  "xi": false,
-  "c": false,
-  "v": false,
-  "buy": 5.0
- },
- {
-  "id": 269,
-  "name": "Sessegnon",
-  "pos": "DEF",
-  "club": "FUL",
-  "xi": false,
-  "c": false,
-  "v": false,
-  "buy": 4.5
- },
- {
-  "id": 295,
-  "name": "McBurnie",
-  "pos": "FWD",
-  "club": "HUL",
-  "xi": false,
-  "c": false,
-  "v": false,
-  "buy": 5.5
- },
- {
-  "id": 57,
-  "name": "Petrović",
-  "pos": "GK",
-  "club": "BOU",
-  "xi": false,
-  "c": false,
-  "v": false,
-  "buy": 4.5
- }
+  {
+    "id": 4,
+    "name": "Gabriel",
+    "pos": "DEF",
+    "club": "ARS",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 8.0
+  },
+  {
+    "id": 57,
+    "name": "Petrović",
+    "pos": "GK",
+    "club": "BOU",
+    "xi": false,
+    "c": false,
+    "v": false,
+    "buy": 4.5
+  },
+  {
+    "id": 61,
+    "name": "Truffert",
+    "pos": "DEF",
+    "club": "BOU",
+    "xi": false,
+    "c": false,
+    "v": false,
+    "buy": 5.5
+  },
+  {
+    "id": 82,
+    "name": "Kelleher",
+    "pos": "GK",
+    "club": "BRE",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 5.0
+  },
+  {
+    "id": 106,
+    "name": "Thiago",
+    "pos": "FWD",
+    "club": "BRE",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 8.0
+  },
+  {
+    "id": 124,
+    "name": "Groß",
+    "pos": "MID",
+    "club": "BHA",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 5.5
+  },
+  {
+    "id": 127,
+    "name": "Gomez",
+    "pos": "MID",
+    "club": "BHA",
+    "xi": false,
+    "c": false,
+    "v": false,
+    "buy": 5.0
+  },
+  {
+    "id": 204,
+    "name": "Mitchell",
+    "pos": "DEF",
+    "club": "CRY",
+    "xi": false,
+    "c": false,
+    "v": false,
+    "buy": 4.5
+  },
+  {
+    "id": 237,
+    "name": "Ndiaye",
+    "pos": "MID",
+    "club": "EVE",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 6.0
+  },
+  {
+    "id": 346,
+    "name": "Calvert-Lewin",
+    "pos": "FWD",
+    "club": "LEE",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 6.0
+  },
+  {
+    "id": 356,
+    "name": "Virgil",
+    "pos": "DEF",
+    "club": "LIV",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 6.5
+  },
+  {
+    "id": 397,
+    "name": "Semenyo",
+    "pos": "MID",
+    "club": "MCI",
+    "xi": true,
+    "c": false,
+    "v": true,
+    "buy": 8.5
+  },
+  {
+    "id": 411,
+    "name": "Haaland",
+    "pos": "FWD",
+    "club": "MCI",
+    "xi": true,
+    "c": true,
+    "v": false,
+    "buy": 15.5
+  },
+  {
+    "id": 445,
+    "name": "Thiaw",
+    "pos": "DEF",
+    "club": "NEW",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 5.0
+  },
+  {
+    "id": 481,
+    "name": "Anderson",
+    "pos": "MID",
+    "club": "MCI",
+    "xi": true,
+    "c": false,
+    "v": false,
+    "buy": 6.5
+  }
 ]

@@ -12,6 +12,8 @@ import pathlib
 import numpy as np
 import pandas as pd
 
+import phase
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 D = ROOT / "data"
 
@@ -289,6 +291,11 @@ def build(horizon_start=1, horizon=8, mover_blend=None):
 
     df = pd.DataFrame(rows)
     df["xp"] = df["xp"].clip(lower=0)
+
+    # Season-phase correction. Season-average rates applied to an 8 GW horizon
+    # starting at GW1 are biased for players whose scoring rate is not stationary
+    # across the season. Cold-start device, retire around GW4-GW6.
+    df = phase.apply_phase(df)
     return df, p
 
 
@@ -296,6 +303,10 @@ if __name__ == "__main__":
     df, p = build()
     df.to_parquet(ROOT / "out" / "xp.parquet")
     print(f"{len(df):,} player-gameweek rows, GW{df.gw.min()}-{df.gw.max()}")
+    if "phase_mult" in df.columns:
+        n = (df["phase_mult"] != 1.0).groupby(df["code"]).first().sum()
+        print(f"season-phase correction applied to {n} players "
+              f"(enabled={phase.PHASE_ENABLED})")
     gw1 = df[df.gw == 1].nlargest(20, "xp")
     print(gw1[["name", "pos", "price", "sel", "opp", "home", "xmins", "xp",
                "xp_att", "xp_cs", "xp_defcon", "xp_bonus"]].round(2).to_string(index=False))
