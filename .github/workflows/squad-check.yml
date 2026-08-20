@@ -1,0 +1,40 @@
+name: squad-check
+
+on:
+  schedule:
+    - cron: '20 * * * *'      # hourly, offset from the main mirror job
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: squad-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install requests
+
+      - name: Fetch and compare
+        env:
+          FPL_COOKIE: ${{ secrets.FPL_COOKIE }}
+          FPL_ENTRY_ID: ${{ vars.FPL_ENTRY_ID }}
+          SQUAD_CHECK_VERBOSITY: ${{ vars.SQUAD_CHECK_VERBOSITY }}
+        run: python scripts/squad_check.py
+
+      - name: Commit verdict
+        run: |
+          git config user.name  "fpl-mirror-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/squad_check.json
+          git diff --staged --quiet || git commit -m "squad-check $(date -u +%FT%TZ)"
+          git push
