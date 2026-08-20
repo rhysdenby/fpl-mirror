@@ -3,6 +3,11 @@
 Publishes a verdict only. The raw /my-team/ payload never touches disk:
 the mirror is public and the saved squad is competitively sensitive
 before a deadline.
+
+DIAGNOSTIC BUILD: temporarily logs response body preview and cookie
+length (not content) to debug a 403 that looks like a clean DRF auth
+rejection rather than a bot-block page. Revert once auth is confirmed
+working.
 """
 import json, os, pathlib, sys
 from datetime import datetime, timezone
@@ -18,8 +23,6 @@ NOW = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def emit(**kw):
-    """Always write a verdict, including on failure. A missing file and a
-    failed check must never look the same to the consumer."""
     payload = {"checked_at": NOW, "entry_id": int(ENTRY), **kw}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
@@ -28,20 +31,30 @@ def emit(**kw):
 
 
 def fetch():
+    print(f"DIAG: cookie length = {len(COOKIE)} chars")
+    print(f"DIAG: cookie starts with = {COOKIE[:20]!r}")
+    print(f"DIAG: contains 'pl_profile' = {'pl_profile' in COOKIE}")
+    print(f"DIAG: contains 'sessionid' = {'sessionid' in COOKIE}")
+    print(f"DIAG: contains 'datadome' = {'datadome' in COOKIE}")
+
     r = requests.get(
         f"https://fantasy.premierleague.com/api/my-team/{ENTRY}/",
         headers={
             "Cookie": COOKIE,
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": f"https://fantasy.premierleague.com/entry/{ENTRY}/event/1",
+            "Accept-Language": "en-GB,en;q=0.9",
         },
         timeout=30,
     )
     ctype = r.headers.get("content-type", "")
-    # Cloudflare returns HTML with a 200. Status code alone is not enough.
+    print(f"DIAG: status={r.status_code} content-type={ctype!r}")
+    print(f"DIAG: body preview = {r.text[:500]!r}")
+
     if r.status_code in (401, 403) or "application/json" not in ctype:
-        raise PermissionError(f"auth failed: status={r.status_code} content-type={ctype!r}")
+        raise PermissionError(f"auth failed: status={r.status_code} content-type={ctype!r} body_preview={r.text[:300]!r}")
     return r.json()
 
 
@@ -50,7 +63,7 @@ def main():
         mt = fetch()
     except PermissionError as e:
         emit(auth_ok=False, error=str(e), match=None)
-        sys.exit(1)          # fail the job so it surfaces in the Actions tab
+        sys.exit(1)
     except Exception as e:
         emit(auth_ok=False, error=f"{type(e).__name__}: {e}", match=None)
         sys.exit(1)
@@ -62,14 +75,11 @@ def main():
     missing, extra = intended - live, live - intended
     tr = mt.get("transfers") or {}
 
-    # Log the raw chips array while its semantics are still unconfirmed.
-    # Not secret, and reading it is how the field gets pinned down.
     print("RAW chips:", json.dumps(mt.get("chips", []), indent=2))
     armed = [c["name"] for c in mt.get("chips", [])
              if c.get("status_for_entry") == "active"]
 
     cap = next((p["element"] for p in live_picks if p.get("is_captain")), None)
-    vice = next((p["element"] for p in live_picks if p.get("is_vice_captain")), None)
     intended_cap = next((p["id"] for p in json.load(open(ROOT / "model" / "squad_ids.json"))
                          if p.get("c")), None)
 
