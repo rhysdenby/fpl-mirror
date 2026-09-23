@@ -1,8 +1,19 @@
 """Build the per-player, per-gameweek expected points table for 2026/27.
 
-Cold start: there is no 2026/27 match data yet, so every rate is estimated from
-2025/26 per-match history (vaastav mirror) joined onto current prices, positions
-and availability from the live FPL mirror.
+Rates start from 2025/26 per-match history (vaastav mirror) joined onto current
+prices, positions and availability from the live FPL mirror. From 24 Sep 2026
+three self-weighting blends pull in 2026/27 data as it accumulates:
+
+1. START BLEND. p(start) is updated with 2026/27 starts as a Bayesian average,
+   (START_ALPHA * prior + starts) / (START_ALPHA + team games played).
+2. ATTACK BLEND. g_90 / a_90 are blended with 2026/27 rates, weight
+   w = minutes / (minutes + ATTACK_M0). Chosen by Rhys 24 Sep 2026 over a
+   fixed alpha, so the weight grows on its own and fringe players stay shrunk.
+3. TEAM BLEND. team_blend.blend() folds opponent-adjusted 2026/27 team xG and
+   xGC into the 2025/26 team strengths, weight n / (n + BLEND_K).
+
+In-season club movers (a club change after GW1) are excluded from 1 and 2,
+because their 2026/27 numbers were produced at more than one club.
 """
 
 import json
@@ -13,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 import phase
+import team_blend
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 D = ROOT / "data"
@@ -167,13 +179,65 @@ def team_strength(teams, hist):
 # the NEW club. MOVER_BLEND = weight on the inherited rate (1.0 reproduces shipped).
 MOVER_BLEND = 0.50
 
+# 2026/27 blends. See module docstring. Neither needs weekly tuning.
+START_ALPHA = 3.0     # pseudo-gameweeks of prior in the start blend
+ATTACK_M0 = 540.0     # minutes at which 2026/27 attacking data carries 50% weight
 
-def build(horizon_start=1, horizon=8, mover_blend=None):
+
+def add_relative(ts):
+    """(Re)compute the *_rel columns. Must run after anything that edits team strengths,
+    otherwise opponent multipliers keep using the pre-blend values."""
+    for c in ["xg_home", "xg_away", "xgc_home", "xgc_away"]:
+        ts[c + "_rel"] = ts[c] / ts[c].mean()
+    return ts
+
+
+def team_games_played(fixtures):
+    """Finished fixtures per team id this season."""
+    f = fixtures[fixtures["finished"] == True]  # noqa: E712
+    return pd.concat([f["team_h"], f["team_a"]]).value_counts()
+
+
+def in_season_movers():
+    """Player ids whose 2026/27 match history shows more than one club.
+
+    Only covers the ~280 players in element_summaries.json. Anyone outside it is
+    treated as not having moved, which is the safe side for low-minutes players.
+    """
+    try:
+        es = json.load(open(D / "element_summaries.json"))
+        fx = json.load(open(D / "fixtures.json"))
+        players = json.load(open(D / "players.json"))
+    except FileNotFoundError:
+        return set()
+    by_fx = {f["id"]: f for f in fx}
+    cur_team = {p["id"]: p["team"] for p in players}
+    movers = set()
+    for pid, v in es.items():
+        pid = int(pid)
+        for h in v.get("history", []):
+            f = by_fx.get(h["fixture"])
+            if not f or h.get("minutes", 0) == 0:
+                continue
+            own = f["team_h"] if h["was_home"] else f["team_a"]
+            if own != cur_team.get(pid):
+                movers.add(pid)
+                break
+    return movers
+
+
+def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_alpha=None,
+          use_team_blend=True):
     mover_blend = MOVER_BLEND if mover_blend is None else mover_blend
+    attack_m0 = ATTACK_M0 if attack_m0 is None else attack_m0
+    start_alpha = START_ALPHA if start_alpha is None else start_alpha
     players, teams, fixtures, hist, old = load()
     hist = per_match_history(hist, old, players)
     rates = player_rates(hist, players)
     ts = team_strength(teams, hist)
+    if use_team_blend:
+        ts = team_blend.blend(ts, players, fixtures, teams)
+        ts = add_relative(ts)
 
     p = players.copy()
     p["pos"] = p["element_type"].map(POS)
@@ -230,11 +294,35 @@ def build(horizon_start=1, horizon=8, mover_blend=None):
     # inconsistent, and biased upward for anyone moving to a stronger squad.
     mv = p["moved"].fillna(False)
     blended = mover_blend * p["_base_start"] + (1 - mover_blend) * p["_prior_start"]
-    p.loc[mv, "p_start"] = blended[mv].clip(0, 0.97) * p.loc[mv, "avail"]
+    prior = p["_base_start"].where(~mv, blended).clip(0, 0.97)
+
+    # START BLEND. Bayesian update of the prior with 2026/27 starts at the current
+    # club. In-season movers keep the prior only.
+    ism = p["id"].isin(in_season_movers())
+    n_team = p["team"].map(team_games_played(fixtures)).fillna(0)
+    starts26 = pd.to_numeric(p["starts"], errors="coerce").fillna(0).clip(upper=n_team)
+    post = (start_alpha * prior + starts26) / (start_alpha + n_team)
+    p["_start_prior"] = prior
+    p["p_start"] = prior.where(ism, post).clip(0, 0.97) * p["avail"]
     p["p_cameo"] = ((1 - p["p_start"]) * 0.30 * p["avail"]).clip(0, 0.5)
     p["xmins"] = p["p_start"] * p["mins_if_start"] + p["p_cameo"] * 22
+
+    # ATTACK BLEND. The club-move multiplier adjusts the 2025/26 prior only; 2026/27
+    # numbers were already produced at the new club. Same 75/25 xG-to-actual mix
+    # as the prior so the two halves are on the same footing.
+    mins26 = pd.to_numeric(p["minutes"], errors="coerce").fillna(0)
+    m90_26 = (mins26 / 90.0).clip(lower=1 / 90)
+    cur = {
+        "g_90": 0.75 * pd.to_numeric(p["expected_goals"], errors="coerce").fillna(0) / m90_26
+                + 0.25 * p["goals_scored"] / m90_26,
+        "a_90": 0.75 * pd.to_numeric(p["expected_assists"], errors="coerce").fillna(0) / m90_26
+                + 0.25 * p["assists"] / m90_26,
+    }
+    w = (mins26 / (mins26 + attack_m0)).where(~ism, 0.0) if attack_m0 > 0 else mins26 * 0.0
+    p["attack_w"] = w
     for c in ["g_90", "a_90"]:
-        p[c] = p[c] * p["club_move_mult"]
+        p[c + "_prior"] = p[c] * p["club_move_mult"]
+        p[c] = (1 - w) * p[c + "_prior"] + w * cur[c]
 
     fx = fixtures[fixtures["event"].between(horizon_start, horizon_start + horizon - 1)].copy()
     by_team = {t: fx[(fx["team_h"] == t) | (fx["team_a"] == t)] for t in teams["id"]}
@@ -300,13 +388,22 @@ def build(horizon_start=1, horizon=8, mover_blend=None):
 
 
 if __name__ == "__main__":
-    df, p = build()
+    import sys
+    # Default the horizon to the next gameweek in meta.json, not GW1.
+    try:
+        start = int(sys.argv[1]) if len(sys.argv) > 1 else int(json.load(open(D / "meta.json"))["next_event"])
+    except (FileNotFoundError, KeyError, ValueError):
+        start = 1
+    df, p = build(horizon_start=start)
+    (ROOT / "out").mkdir(exist_ok=True)
     df.to_parquet(ROOT / "out" / "xp.parquet")
+    print(f"2026/27 blends: start alpha {START_ALPHA}, attack M0 {ATTACK_M0:.0f}, "
+          f"team blend K {team_blend.BLEND_K}")
     print(f"{len(df):,} player-gameweek rows, GW{df.gw.min()}-{df.gw.max()}")
     if "phase_mult" in df.columns:
         n = (df["phase_mult"] != 1.0).groupby(df["code"]).first().sum()
         print(f"season-phase correction applied to {n} players "
               f"(enabled={phase.PHASE_ENABLED})")
-    gw1 = df[df.gw == 1].nlargest(20, "xp")
-    print(gw1[["name", "pos", "price", "sel", "opp", "home", "xmins", "xp",
+    top = df[df.gw == start].nlargest(20, "xp")
+    print(top[["name", "pos", "price", "sel", "opp", "home", "xmins", "xp",
                "xp_att", "xp_cs", "xp_defcon", "xp_bonus"]].round(2).to_string(index=False))

@@ -56,8 +56,11 @@ CLIP = (0.75, 1.50)
 MIN_EARLY_MINS = 270  # 3 full matches
 MIN_LATE_MINS = 900   # 10 full matches
 
-# Full strength for the measured window, then decay to nothing by GW9.
-TAPER = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0, 6: 1.0, 7: 0.66, 8: 0.33}
+# Full strength GW1-5, retired from GW6 (the Wildcard), as agreed in 02-strategy.md.
+# Retired early because from 24 Sep features.py blends in 2026/27 attacking data,
+# which already carries the early-season rate. Keeping both would double-count it.
+# Was: {1..6: 1.0, 7: 0.66, 8: 0.33}.
+TAPER = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0}
 
 
 def _season_frame(season):
