@@ -56,11 +56,13 @@ CLIP = (0.75, 1.50)
 MIN_EARLY_MINS = 270  # 3 full matches
 MIN_LATE_MINS = 900   # 10 full matches
 
-# Full strength GW1-5, retired from GW6 (the Wildcard), as agreed in 02-strategy.md.
-# Retired early because from 24 Sep features.py blends in 2026/27 attacking data,
-# which already carries the early-season rate. Keeping both would double-count it.
-# Was: {1..6: 1.0, 7: 0.66, 8: 0.33}.
-TAPER = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0}
+# Full strength for the measured window (GW1-6), then decay to nothing by GW9.
+# From 24 Sep 2026 the multiplier applies only to the 2025/26-prior share of the
+# attacking rate, (1 - attack_w), because the 2026/27 share blended in by
+# features.py was itself produced in the early window. This replaces a same-day
+# decision to retire the correction outright from GW6, which also discarded the
+# part of the effect the 2026/27 data does not carry.
+TAPER = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0, 6: 1.0, 7: 0.66, 8: 0.33}
 
 
 def _season_frame(season):
@@ -135,7 +137,8 @@ def apply_phase(df, mults=None, enabled=PHASE_ENABLED):
 
     df["phase_mult"] = df["code"].map(mults).fillna(1.0)
     taper = df["gw"].map(TAPER).fillna(0.0)
-    eff = 1.0 + (df["phase_mult"] - 1.0) * taper
+    prior_share = (1.0 - df["attack_w"]).clip(0, 1) if "attack_w" in df else 1.0
+    eff = 1.0 + (df["phase_mult"] - 1.0) * taper * prior_share
     df["xp"] = (df["xp"] - df["xp_att"] + df["xp_att"] * eff).clip(lower=0)
     return df
 

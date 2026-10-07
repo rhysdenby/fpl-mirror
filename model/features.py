@@ -14,6 +14,20 @@ three self-weighting blends pull in 2026/27 data as it accumulates:
 
 In-season club movers (a club change after GW1) are excluded from 1 and 2,
 because their 2026/27 numbers were produced at more than one club.
+
+Further changes 24 Sep 2026 (items 2-4 of claude/13-fix-guide.md, delegated by Rhys):
+
+4. AVAILABILITY per fixture, not per horizon. A doubtful flag tapers over three
+   gameweeks (AVAIL_TAPER); an injury or suspension with a dated return in the news
+   counts only until that date, with the first week back at RETURN_WEEK_AVAIL for
+   injuries; undated absences keep the full haircut.
+5. MINUTES BLEND. mins_if_start blends 2026/27 minutes per start, (MINS_K * prior +
+   starts * mps) / (MINS_K + starts), from horizon GW MINS_BLEND_FROM_GW (GW7).
+6. PROMOTED PRIOR measured from 12 promoted team-seasons (PROMOTED_REL) and exempt
+   from the 30% shrink.
+7. SEASON-PHASE correction (phase.py) restored for GW6-8 on its original taper, but
+   applied only to the (1 - attack_w) prior share of the attacking rate. Each row
+   carries attack_w for that purpose.
 """
 
 import json
@@ -157,20 +171,32 @@ def team_strength(teams, hist):
     ts = teams.set_index("id")[["name", "short_name", "strength_overall_home", "strength_overall_away"]].copy()
     ts = ts.join(obs, on="name")
 
-    # Promoted-side prior, roughly what a newly promoted team has averaged.
-    PROMOTED = {"xg_home": 1.05, "xg_away": 0.85, "xgc_home": 1.60, "xgc_away": 1.90}
+    # Promoted-side prior. Measured 24 Sep 2026 on the 12 promoted team-seasons
+    # 2022/23 to 2025/26 (Fulham, Bournemouth, Forest; Burnley, Sheffield Utd, Luton;
+    # Leicester, Ipswich, Southampton; Leeds, Burnley, Sunderland), each relative to
+    # its own season's league mean, excluding 2022/23 fixtures before FPL published xG.
+    # Stored as ratios so it scales with the baseline season. Replaces hand-set
+    # constants (1.05 / 0.85 / 1.60 / 1.90) that, after shrinkage, rated promoted
+    # defences better than Bournemouth's measured one.
+    PROMOTED_REL = {"xg_home": 0.721, "xg_away": 0.709, "xgc_home": 1.280, "xgc_away": 1.223}
     ts["promoted"] = ts["xg_home"].isna()
-    for c, v in PROMOTED.items():
-        ts[c] = ts[c].fillna(v)
+    base = ts.loc[~ts["promoted"]]
+    n_p, n = int(ts["promoted"].sum()), len(ts)
+    for c, r in PROMOTED_REL.items():
+        # Ratios were measured against the all-team mean, promoted sides included,
+        # so solve p = r * (sum_others + n_p * p) / n for p.
+        p_val = (n - n_p) * r * base[c].mean() / (n - n_p * r)
+        ts[c] = ts[c].fillna(p_val)
 
     # Shrink 30% toward the league mean: a summer of transfers moves teams around.
+    # Promoted sides are exempt: their prior is already a population mean, so
+    # shrinking it again would pull them toward mid-table twice.
     SHRINK = 0.30
-    for c in PROMOTED:
-        ts[c] = (1 - SHRINK) * ts[c] + SHRINK * ts[c].mean()
+    for c in PROMOTED_REL:
+        mean = ts[c].mean()
+        ts.loc[~ts["promoted"], c] = (1 - SHRINK) * ts.loc[~ts["promoted"], c] + SHRINK * mean
 
-    for c in PROMOTED:
-        ts[c + "_rel"] = ts[c] / ts[c].mean()
-    return ts
+    return add_relative(ts)
 
 
 # Movers keep their OLD club's start rate under the shipped model, which is wrong
@@ -182,6 +208,98 @@ MOVER_BLEND = 0.50
 # 2026/27 blends. See module docstring. Neither needs weekly tuning.
 START_ALPHA = 3.0     # pseudo-gameweeks of prior in the start blend
 ATTACK_M0 = 540.0     # minutes at which 2026/27 attacking data carries 50% weight
+
+# Decided 24 Sep 2026 (Rhys delegated items 2-4 of claude/13-fix-guide.md).
+# Availability haircut on a DOUBTFUL flag applies to the flagged gameweek and fades:
+# share of the haircut kept in horizon week k. Beyond the table it is gone.
+AVAIL_TAPER = {0: 1.0, 1: 0.5, 2: 0.25}
+# Minutes-per-start blend: pseudo-starts of 2025/26 prior, and first horizon GW it
+# applies from (deferred until after the GW6 Wildcard so the Wildcard solve is on
+# the model version that was reviewed).
+MINS_K = 3.0
+MINS_BLEND_FROM_GW = 7
+# Availability in the first week after an injured player's stated return date.
+RETURN_WEEK_AVAIL = 0.75
+# Build 3 (24 Sep 2026): season-phase correction applies to the prior share only.
+PHASE_ON_PRIOR_SHARE = True
+
+_MONTHS = {m: i for i, m in enumerate(
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
+
+
+def _return_date(pl):
+    """Parse 'Expected back 12 Oct' / 'Suspended until 17 Oct' from FPL news.
+
+    Returns a UTC Timestamp or None. The year is the first one that puts the date
+    on or after the day the news was posted.
+    """
+    import re
+    news = pl.get("news") or ""
+    m = re.search(r"(?:back|until)\s+(\d{1,2})\s+([A-Z][a-z]{2})", news)
+    if not m or m.group(2) not in _MONTHS:
+        return None
+    added = pd.to_datetime(pl.get("news_added"), utc=True, errors="coerce")
+    ref = added if pd.notna(added) else pd.Timestamp.now(tz="UTC")
+    for yr in (ref.year, ref.year + 1):
+        try:
+            d = pd.Timestamp(year=yr, month=_MONTHS[m.group(2)], day=int(m.group(1)), tz="UTC")
+        except ValueError:
+            return None
+        if d >= ref.normalize():
+            return d
+    return None
+
+
+def fixture_avail(pl, k, kickoff):
+    """Availability multiplier for one fixture, k = horizon week index (0 = next GW).
+
+    - status d (doubtful): the haircut tapers per AVAIL_TAPER, so a one-match knock
+      does not cost eight gameweeks of projection (the GW2 Anderson case).
+    - status i or s with a parseable return date in the news: out before it, fit after.
+    - anything else flagged (i/s/u/n without a date): full haircut, whole horizon.
+    """
+    a = float(pl["avail"])
+    if a >= 1.0:
+        return 1.0
+    if pl["status"] == "d":
+        return 1.0 - (1.0 - a) * AVAIL_TAPER.get(k, 0.0)
+    rd = pl.get("_return_date")
+    if rd is not None and pd.notna(rd) and kickoff:
+        ko = pd.Timestamp(kickoff)
+        if ko < rd:
+            return a
+        # Injury return dates slip and first games back are often managed, so the
+        # first week after an injury return date counts at RETURN_WEEK_AVAIL.
+        # Suspensions end cleanly and are not discounted.
+        if pl["status"] == "i" and ko < rd + pd.Timedelta(days=7):
+            return RETURN_WEEK_AVAIL
+        return 1.0
+    return a
+
+
+def minutes_per_start_2627(p):
+    """2026/27 minutes per start and number of starts, per player row in p.
+
+    Uses per-match history from element_summaries.json where available (PL only,
+    start matches only); otherwise approximates from season totals, which slightly
+    overstates for players with sub appearances.
+    """
+    starts = pd.to_numeric(p["starts"], errors="coerce").fillna(0)
+    mins = pd.to_numeric(p["minutes"], errors="coerce").fillna(0)
+    mps = (mins / starts.where(starts > 0)).clip(upper=90)
+    try:
+        es = json.load(open(D / "element_summaries.json"))
+    except FileNotFoundError:
+        es = {}
+    exact = {}
+    for pid, v in es.items():
+        st = [h["minutes"] for h in v.get("history", []) if h.get("starts") == 1]
+        if st:
+            exact[int(pid)] = (sum(st) / len(st), len(st))
+    ex = p["id"].map(lambda i: exact.get(i, (np.nan, np.nan)))
+    mps = pd.Series([e[0] for e in ex], index=p.index).fillna(mps)
+    nst = pd.Series([e[1] for e in ex], index=p.index).fillna(starts)
+    return mps.fillna(0), nst.fillna(0)
 
 
 def add_relative(ts):
@@ -303,9 +421,23 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
     starts26 = pd.to_numeric(p["starts"], errors="coerce").fillna(0).clip(upper=n_team)
     post = (start_alpha * prior + starts26) / (start_alpha + n_team)
     p["_start_prior"] = prior
-    p["p_start"] = prior.where(ism, post).clip(0, 0.97) * p["avail"]
+    # p_start_fit is the fit-player start probability. Availability is applied per
+    # fixture in the loop below (see fixture_avail), so a one-week knock no longer
+    # docks all eight horizon gameweeks. p_start / xmins here are the first-week view.
+    p["p_start_fit"] = prior.where(ism, post).clip(0, 0.97)
+
+    # MINUTES BLEND (active from MINS_BLEND_FROM_GW). mins_if_start was a pure
+    # 2025/26 average; blend in 2026/27 minutes per start, shrunk by starts made.
+    if horizon_start >= MINS_BLEND_FROM_GW:
+        mps, nst = minutes_per_start_2627(p)
+        use = (~ism) & (nst > 0)
+        blended_mins = (MINS_K * p["mins_if_start"] + nst * mps) / (MINS_K + nst)
+        p.loc[use, "mins_if_start"] = blended_mins[use].clip(45, 90)
+
+    p["p_start"] = p["p_start_fit"] * p["avail"]
     p["p_cameo"] = ((1 - p["p_start"]) * 0.30 * p["avail"]).clip(0, 0.5)
     p["xmins"] = p["p_start"] * p["mins_if_start"] + p["p_cameo"] * 22
+    p["_return_date"] = p.apply(_return_date, axis=1)
 
     # ATTACK BLEND. The club-move multiplier adjusts the 2025/26 prior only; 2026/27
     # numbers were already produced at the new club. Same 75/25 xG-to-actual mix
@@ -349,10 +481,16 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
             opp_att = ts.loc[opp, f"xg_{opp_ha}_rel"]
             xgc = float(own_def * opp_att)
 
-            m90 = pl["xmins"] / 90.0
+            # Availability for THIS fixture, not the whole horizon.
+            a_g = fixture_avail(pl, int(f["event"]) - horizon_start, f["kickoff_time"])
+            p_start_g = pl["p_start_fit"] * a_g
+            p_cameo_g = min(0.5, max(0.0, (1 - p_start_g) * 0.30 * a_g))
+            xmins_g = p_start_g * pl["mins_if_start"] + p_cameo_g * 22
+
+            m90 = xmins_g / 90.0
             pos = pl["pos"]
-            p_play = min(1.0, pl["p_start"] + pl["p_cameo"])
-            p_60 = pl["p_start"] * (0.90 if pl["mins_if_start"] > 70 else 0.55)
+            p_play = min(1.0, p_start_g + p_cameo_g)
+            p_60 = p_start_g * (0.90 if pl["mins_if_start"] > 70 else 0.55)
 
             xp_apps = p_60 * 2 + (p_play - p_60) * 1
             xp_goals = pl["g_90"] * m90 * att_mult * GOAL_PTS[pos]
@@ -361,7 +499,7 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
             xp_cs = p_cs * CS_PTS[pos]
             xp_conc = -(xgc * m90 / 2.0) if pos in ("GK", "DEF") else 0.0
             xp_saves = (pl["saves_90"] * m90 / 3.0) if pos == "GK" else 0.0
-            xp_defcon = pl["dc_hit"] * pl["p_start"] * 2.0
+            xp_defcon = pl["dc_hit"] * p_start_g * 2.0
             xp_bonus = pl["bonus_90"] * m90 * BONUS_CONFIDENCE * BONUS_POS_TILT[pos]
             xp_cards = -pl["yellows_90"] * m90
 
@@ -369,7 +507,7 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
                 "code": pl["code"], "id": pl["id"], "name": pl["web_name"], "pos": pos,
                 "team": tid, "price": pl["price"], "sel": float(pl["selected_by_percent"]),
                 "gw": int(f["event"]), "opp": opp, "home": home, "fdr": fdr,
-                "xmins": pl["xmins"], "p_start": pl["p_start"],
+                "xmins": xmins_g, "p_start": p_start_g, "avail_g": a_g, "attack_w": pl["attack_w"],
                 "xp": xp_apps + xp_goals + xp_assists + xp_cs + xp_conc + xp_saves
                       + xp_defcon + xp_bonus + xp_cards,
                 "xp_att": xp_goals + xp_assists, "xp_cs": xp_cs, "xp_defcon": xp_defcon,
