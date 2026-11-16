@@ -13,7 +13,13 @@ does nothing. Commit and push or the next scheduled run uses the old model.**
 | `optimise.py` | MILP squad optimiser (initial squad / wildcard mode) |
 | `weekly.py` | weekly transfer optimiser: compares hold / 1 / 2 / 3 moves net of hits |
 | `backtest.py` | walk-forward validation on 2025/26, fit GW1-19, test GW20-38 |
-| `squad_ids.json` | the GW1 squad, as element ids |
+| `phase.py` | season-phase correction (prior share of the attacking rate only, GW1-8 taper) |
+| `team_blend.py` | opponent-adjusted 2026/27 team strength blend |
+| `squad_ids.json` | the current squad (id, buy price, XI / captain flags). Read by `weekly.py --squad` and `scripts/squad_check.py` |
+
+## Dependencies
+
+`pandas`, `numpy`, `pyarrow`, `pulp<3`. PuLP 3+ removed `LpVariable.dicts`, which `weekly.py` uses, so an unpinned install breaks the weekly optimiser.
 
 ## Inputs
 
@@ -24,6 +30,14 @@ does nothing. Commit and push or the next scheduled run uses the old model.**
 - `hist_players_2526.csv` — `vaastav/Fantasy-Premier-League/data/2025-26/players_raw.csv`
 
 ## Change log
+
+Current build: **5**. Full detail in the `features.py` docstring.
+
+| Build | Date | Change |
+|---|---|---|
+| 3 | 24 Sep 2026 | start / attack / minutes blends with 2026/27 data, per-fixture availability, measured promoted prior, phase correction on prior share only |
+| 4 | 25 Oct 2026 | DefCon blend: `dc_hit` shrinks toward 2026/27 current-club hits, `DC_K = 5` (fitted on one-step-ahead Brier) |
+| 5 | 26 Oct 2026 | in-season movers blend on current-club 2026/27 data instead of being frozen on the prior (`MOVER_CURRENT_CLUB`) |
 
 ### 18 Aug 2026 — mover minutes fix (`MOVER_BLEND`)
 

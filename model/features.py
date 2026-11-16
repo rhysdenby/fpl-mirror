@@ -28,6 +28,25 @@ Further changes 24 Sep 2026 (items 2-4 of claude/13-fix-guide.md, delegated by R
 7. SEASON-PHASE correction (phase.py) restored for GW6-8 on its original taper, but
    applied only to the (1 - attack_w) prior share of the attacking rate. Each row
    carries attack_w for that purpose.
+
+Build 4 (25 Oct 2026, approved by Rhys):
+
+8. DEFCON BLEND. dc_hit (per-start probability of crossing the DefCon threshold)
+   was pure 2025/26. It now blends 2026/27 hits at the current club as a Bayesian
+   average, (DC_K * prior + hits) / (DC_K + starts). DC_K = 5 was fitted, not
+   chosen: one-step-ahead Brier on 902 2026/27 starts (220 players, GW1-8) is
+   flat for K 4-6 at 0.121, against 0.129 for the pure prior. Players outside
+   element_summaries.json keep the prior.
+
+Build 5 (26 Oct 2026, approved by Rhys):
+
+9. IN-SEASON MOVERS ON CURRENT-CLUB DATA. Movers were frozen on the 2025/26
+   prior (attack_w 0, start prior only), which priced Enzo (CHE -> MCI after GW1)
+   on Chelsea rates: 21.4 decayed xP v 15.0 on his City data. They now blend
+   exactly like everyone else, but only on matches for their CURRENT club, the
+   same rule build 4 uses for DefCon: start blend over current-club team games,
+   attack blend over current-club minutes, minutes-per-start over current-club
+   starts. A mover with no current-club matches keeps the prior.
 """
 
 import json
@@ -222,6 +241,10 @@ MINS_BLEND_FROM_GW = 7
 RETURN_WEEK_AVAIL = 0.75
 # Build 3 (24 Sep 2026): season-phase correction applies to the prior share only.
 PHASE_ON_PRIOR_SHARE = True
+# Build 4 (25 Oct 2026): pseudo-starts of 2025/26 prior in the DefCon hit-rate blend.
+DC_K = 5.0
+# Build 5 (26 Oct 2026): in-season movers blend on current-club 2026/27 data only.
+MOVER_CURRENT_CLUB = True
 
 _MONTHS = {m: i for i, m in enumerate(
     ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
@@ -300,6 +323,88 @@ def minutes_per_start_2627(p):
     mps = pd.Series([e[0] for e in ex], index=p.index).fillna(mps)
     nst = pd.Series([e[1] for e in ex], index=p.index).fillna(starts)
     return mps.fillna(0), nst.fillna(0)
+
+
+def defcon_hits_2627(p):
+    """2026/27 DefCon hits and starts at the player's CURRENT club, per row in p.
+
+    Per-match, from element_summaries.json (starts only, threshold by position).
+    Starts at a previous club are dropped, so in-season movers blend only on what
+    they have done in their current role. Players not in the file get (0, 0),
+    which leaves the 2025/26 prior untouched.
+    """
+    thr = {"DEF": 10, "MID": 12, "FWD": 12}
+    try:
+        es = json.load(open(D / "element_summaries.json"))
+        fx = {f["id"]: f for f in json.load(open(D / "fixtures.json"))}
+    except FileNotFoundError:
+        es, fx = {}, {}
+    pos = dict(zip(p["id"], p["pos"]))
+    team = dict(zip(p["id"], p["team"]))
+    out = {}
+    for pid, v in es.items():
+        pid = int(pid)
+        if pos.get(pid) not in thr:
+            continue
+        hits = starts = 0
+        for h in v.get("history", []):
+            f = fx.get(h.get("fixture"))
+            if h.get("starts") != 1 or not f:
+                continue
+            own = f["team_h"] if h["was_home"] else f["team_a"]
+            if own != team[pid]:
+                continue
+            starts += 1
+            hits += int((h.get("defensive_contribution") or 0) >= thr[pos[pid]])
+        out[pid] = (hits, starts)
+    hs = p["id"].map(lambda i: out.get(i, (0, 0)))
+    return (pd.Series([x[0] for x in hs], index=p.index, dtype=float),
+            pd.Series([x[1] for x in hs], index=p.index, dtype=float))
+
+
+def current_club_2627(p):
+    """2026/27 per-match totals at the player's CURRENT club, per row in p.
+
+    For in-season movers only (build 5). From element_summaries.json: team games
+    (finished fixtures of the current club in his history), starts, minutes,
+    minutes per start, xG, xA, goals and assists. Missing players get zeros,
+    which leaves the prior untouched.
+    """
+    cols = ["cc_games", "cc_starts", "cc_mins", "cc_mps", "cc_xg", "cc_xa", "cc_goals", "cc_assists"]
+    try:
+        es = json.load(open(D / "element_summaries.json"))
+        fx = {f["id"]: f for f in json.load(open(D / "fixtures.json"))}
+    except FileNotFoundError:
+        es, fx = {}, {}
+    team = dict(zip(p["id"], p["team"]))
+    out = {}
+    for pid, v in es.items():
+        pid = int(pid)
+        if pid not in team:
+            continue
+        r = dict.fromkeys(cols, 0.0)
+        smins = 0.0
+        for h in v.get("history", []):
+            f = fx.get(h.get("fixture"))
+            if not f or not f.get("finished"):
+                continue
+            own = f["team_h"] if h["was_home"] else f["team_a"]
+            if own != team[pid]:
+                continue
+            m = float(h.get("minutes") or 0)
+            r["cc_games"] += 1
+            r["cc_mins"] += m
+            r["cc_xg"] += float(h.get("expected_goals") or 0)
+            r["cc_xa"] += float(h.get("expected_assists") or 0)
+            r["cc_goals"] += float(h.get("goals_scored") or 0)
+            r["cc_assists"] += float(h.get("assists") or 0)
+            if h.get("starts") == 1:
+                r["cc_starts"] += 1
+                smins += m
+        r["cc_mps"] = min(90.0, smins / r["cc_starts"]) if r["cc_starts"] else 0.0
+        out[pid] = r
+    rows = [out.get(i, dict.fromkeys(cols, 0.0)) for i in p["id"]]
+    return pd.DataFrame(rows, index=p.index, columns=cols)
 
 
 def add_relative(ts):
@@ -393,6 +498,12 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
     dc_pos_median = p.groupby("pos")["dc_hit"].transform("median")
     p["dc_hit"] = p["dc_hit"].fillna(dc_pos_median * 0.6).fillna(0.0)
     p.loc[p["pos"] == "GK", "dc_hit"] = 0.0
+    # DEFCON BLEND (build 4). Shrink the 2025/26 hit rate toward 2026/27 hits.
+    dc_hits26, dc_starts26 = defcon_hits_2627(p)
+    p["dc_hit_prior"] = p["dc_hit"]
+    p["dc_hits26"], p["dc_starts26"] = dc_hits26, dc_starts26
+    p["dc_hit"] = (DC_K * p["dc_hit"] + dc_hits26) / (DC_K + dc_starts26)
+    p.loc[p["pos"] == "GK", "dc_hit"] = 0.0
 
     # Transfer adjustment. A player's 2025/26 attacking rate was produced by his
     # old team's chance creation. Moving clubs changes that, and roughly a fifth
@@ -415,22 +526,31 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
     prior = p["_base_start"].where(~mv, blended).clip(0, 0.97)
 
     # START BLEND. Bayesian update of the prior with 2026/27 starts at the current
-    # club. In-season movers keep the prior only.
+    # club. In-season movers blend on current-club games only (build 5).
     ism = p["id"].isin(in_season_movers())
     n_team = p["team"].map(team_games_played(fixtures)).fillna(0)
     starts26 = pd.to_numeric(p["starts"], errors="coerce").fillna(0).clip(upper=n_team)
+    cc = current_club_2627(p)
+    if MOVER_CURRENT_CLUB:
+        n_team = n_team.where(~ism, cc["cc_games"])
+        starts26 = starts26.where(~ism, cc["cc_starts"].clip(upper=cc["cc_games"]))
     post = (start_alpha * prior + starts26) / (start_alpha + n_team)
     p["_start_prior"] = prior
     # p_start_fit is the fit-player start probability. Availability is applied per
     # fixture in the loop below (see fixture_avail), so a one-week knock no longer
     # docks all eight horizon gameweeks. p_start / xmins here are the first-week view.
-    p["p_start_fit"] = prior.where(ism, post).clip(0, 0.97)
+    p["p_start_fit"] = (post if MOVER_CURRENT_CLUB else prior.where(ism, post)).clip(0, 0.97)
 
     # MINUTES BLEND (active from MINS_BLEND_FROM_GW). mins_if_start was a pure
     # 2025/26 average; blend in 2026/27 minutes per start, shrunk by starts made.
     if horizon_start >= MINS_BLEND_FROM_GW:
         mps, nst = minutes_per_start_2627(p)
-        use = (~ism) & (nst > 0)
+        if MOVER_CURRENT_CLUB:
+            mps = mps.where(~ism, cc["cc_mps"])
+            nst = nst.where(~ism, cc["cc_starts"])
+            use = nst > 0
+        else:
+            use = (~ism) & (nst > 0)
         blended_mins = (MINS_K * p["mins_if_start"] + nst * mps) / (MINS_K + nst)
         p.loc[use, "mins_if_start"] = blended_mins[use].clip(45, 90)
 
@@ -450,7 +570,17 @@ def build(horizon_start=1, horizon=8, mover_blend=None, attack_m0=None, start_al
         "a_90": 0.75 * pd.to_numeric(p["expected_assists"], errors="coerce").fillna(0) / m90_26
                 + 0.25 * p["assists"] / m90_26,
     }
-    w = (mins26 / (mins26 + attack_m0)).where(~ism, 0.0) if attack_m0 > 0 else mins26 * 0.0
+    if MOVER_CURRENT_CLUB:
+        # Movers: replace season totals with current-club totals before the blend.
+        mins26 = mins26.where(~ism, cc["cc_mins"])
+        m90_26 = (mins26 / 90.0).clip(lower=1 / 90)
+        cur = {
+            "g_90": cur["g_90"].where(~ism, (0.75 * cc["cc_xg"] + 0.25 * cc["cc_goals"]) / m90_26),
+            "a_90": cur["a_90"].where(~ism, (0.75 * cc["cc_xa"] + 0.25 * cc["cc_assists"]) / m90_26),
+        }
+        w = mins26 / (mins26 + attack_m0) if attack_m0 > 0 else mins26 * 0.0
+    else:
+        w = (mins26 / (mins26 + attack_m0)).where(~ism, 0.0) if attack_m0 > 0 else mins26 * 0.0
     p["attack_w"] = w
     for c in ["g_90", "a_90"]:
         p[c + "_prior"] = p[c] * p["club_move_mult"]
