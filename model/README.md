@@ -19,7 +19,7 @@ does nothing. Commit and push or the next scheduled run uses the old model.**
 
 ## Dependencies
 
-`pandas`, `numpy`, `pyarrow`, `pulp<3`. PuLP 3+ removed `LpVariable.dicts`, which `weekly.py` uses, so an unpinned install breaks the weekly optimiser.
+`pandas`, `numpy`, `pyarrow`, `pulp<4`. PuLP 4.0 removed `LpVariable.dicts`, which `weekly.py` uses, so an unpinned install breaks the weekly optimiser.
 
 ## Inputs
 
