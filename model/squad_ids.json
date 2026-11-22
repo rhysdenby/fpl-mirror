@@ -50,14 +50,24 @@
     "buy": 5.0
   },
   {
-    "id": 106,
-    "name": "Thiago",
-    "pos": "FWD",
-    "club": "BRE",
+    "id": 112,
+    "name": "Van Hecke",
+    "pos": "DEF",
+    "club": "TOT",
     "xi": false,
     "c": false,
     "v": false,
-    "buy": 8.0
+    "buy": 5.1
+  },
+  {
+    "id": 115,
+    "name": "De Cuyper",
+    "pos": "DEF",
+    "club": "BHA",
+    "xi": false,
+    "c": false,
+    "v": false,
+    "buy": 5.5
   },
   {
     "id": 124,
@@ -80,30 +90,20 @@
     "buy": 4.9
   },
   {
-    "id": 204,
-    "name": "Mitchell",
-    "pos": "DEF",
-    "club": "CRY",
-    "xi": false,
+    "id": 249,
+    "name": "Barry",
+    "pos": "FWD",
+    "club": "EVE",
+    "xi": true,
     "c": false,
     "v": false,
-    "buy": 4.5
+    "buy": 5.7
   },
   {
     "id": 346,
     "name": "Calvert-Lewin",
     "pos": "FWD",
     "club": "LEE",
-    "xi": true,
-    "c": false,
-    "v": false,
-    "buy": 6.0
-  },
-  {
-    "id": 388,
-    "name": "Guéhi",
-    "pos": "DEF",
-    "club": "MCI",
     "xi": false,
     "c": false,
     "v": false,
